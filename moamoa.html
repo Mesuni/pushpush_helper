@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>모아모아 헬퍼</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #1a2130; --line: #2c3547; --text: #e6e9ef; --muted: #8b93a5;
+    --cell: #0b0f18; --fill: #6b7486; --a: #f0529c; --b: #22c3d6; --c: #f5c518;
+    --btn: #2a3346; --primary: #16a34a; --danger: #dc4444; --accent: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Malgun Gothic", sans-serif; }
+  main { display: flex; gap: 20px; padding: 20px; flex-wrap: wrap; justify-content: center; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  h2 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h2 small { color: var(--muted); font-weight: normal; }
+  h2 b { color: var(--text); }
+  #board { display: grid; grid-template-columns: 22px repeat(10, 32px); gap: 2px; user-select: none; }
+  .lbl { color: var(--muted); font-size: 11px; display: flex; align-items: center; justify-content: center; }
+  .cell { width: 32px; height: 32px; background: var(--cell); border: 1px solid var(--line); border-radius: 4px;
+          cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+  .cell:hover { outline: 2px solid var(--accent); }
+  .cell.on { background: var(--fill); border-color: var(--fill); }
+  .cell.s0 { background: var(--a); border-color: var(--a); color: #111; }
+  .cell.s1 { background: var(--b); border-color: var(--b); color: #111; }
+  .cell.s2 { background: var(--c); border-color: var(--c); color: #111; }
+  .cell.clr { box-shadow: inset 0 0 0 2px #fff6; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { background: var(--btn); color: var(--text); border: 0; border-radius: 8px; padding: 10px 14px; font: inherit;
+           font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { filter: brightness(1.15); }
+  button:disabled { opacity: .4; cursor: default; }
+  .primary { background: var(--primary); } .danger { background: var(--danger); } .accent { background: var(--accent); }
+  .grow { flex: 1; }
+  #right { width: 560px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; }
+  #slots { display: flex; gap: 10px; }
+  .slot { flex: 1; min-height: 110px; border: 2px dashed var(--line); border-radius: 10px; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 6px; cursor: pointer; position: relative; }
+  .slot.full { border-style: solid; }
+  .slot .tag { position: absolute; top: 4px; left: 8px; font-weight: 700; }
+  .slot .hint { color: var(--muted); font-size: 12px; }
+  .mini { display: grid; gap: 2px; }
+  .mini i { width: 11px; height: 11px; border-radius: 2px; }
+  .mini i.f { background: var(--text); }
+  #steps { margin-top: 10px; color: var(--muted); min-height: 22px; }
+  #steps .st { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--text); }
+  #steps .st b.l0 { color: var(--a); } #steps .st b.l1 { color: var(--b); } #steps .st b.l2 { color: var(--c); }
+  .warn { color: #ff8a8a !important; font-weight: 600; }
+  #palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .pc { background: var(--cell); border: 1px solid var(--line); border-radius: 10px; height: 92px; cursor: pointer; position: relative;
+        display: flex; align-items: center; justify-content: center; }
+  .pc:hover { border-color: var(--accent); }
+  .pc .n { position: absolute; top: 3px; left: 7px; font-weight: 700; font-size: 12px; }
+  .pc .k { position: absolute; top: 3px; right: 7px; color: var(--muted); font-size: 11px; }
+  .pc .mini i.f { background: #9fb4d8; }
+  .help { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+  kbd { background: var(--btn); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+  #busy { color: var(--muted); }
+  input#nums { background: var(--cell); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; width: 150px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h2>판 <small><span id="cores" style="margin-right:8px"></span>턴 <b id="turn">0</b> · 지운 줄 <b id="lines" title="클릭해서 수정" style="cursor:pointer;text-decoration:underline dotted">0</b> · <b id="stage">1단계</b></small></h2>
+    <div id="board"></div>
+    <div class="help">칸 클릭 = 채우기/비우기 (실수 수정용 · 줄이 꽉 차면 자동 삭제)</div>
+    <div class="row">
+      <button id="undo" class="grow">↶ 되돌리기</button>
+      <button id="reset" class="danger grow">판 초기화</button>
+    </div>
+  </section>
+
+  <section id="right">
+    <div class="panel">
+      <h2>이번 턴 블록 <small id="busy"></small></h2>
+      <div id="slots"></div>
+      <div id="steps"></div>
+      <div class="row">
+        <button id="place" class="primary grow" disabled>추천대로 놓기 <kbd>Enter</kbd></button>
+        <button id="item" class="accent">1칸 아이템 추천</button>
+        <button id="clear">선택 취소</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>블록 선택 <small>번호 입력: <input id="nums" placeholder="예: 17 19 9"></small></h2>
+      <div class="help">게임에 나온 블록을 1~3개 고르면 바로 추천합니다. 회전·반전은 자동으로 고려합니다.
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기</div>
+      <div id="palette"></div>
+    </div>
+  </section>
+</main>
+<script id="engine-src">
+// 한글 모아모아 엔진 (engine.c의 JavaScript 이식판). 브라우저 메인 스레드·Web Worker·node 공용.
+// 10x16 판, 가로줄만 삭제(중력 없음), 회전/반전 허용. 점수: 블록 하나로 n줄 동시 삭제 = 300*n^2.
+const MoaEngine = (() => {
+  const W = 10, H = 16, FULL = 0x3FF, NP = 19, NF = 13;
+  const SHAPES = [
+    "#", "#.|.#|#.", "#|#|#", "#.|##", "#..|###", "#.|##|#.", ".#.|#.#|.#.", "###|#.#", "#####",
+    "#.#|##.|#.#", ".#|##|.#|##", "#####|.#.#.", "#.#|.#.|###|.#.", "###|#.#|###", "###.#|#.###",
+    "#.#.#|#####", "..#..|#####|.#.#.|..#..", "####|#.#.|####", "####|.##.|####",
+  ];
+  const POP = new Uint8Array(2048);
+  for (let i = 1; i < 2048; i++) POP[i] = POP[i >> 1] + (i & 1);
+
+  // 회전 4 x 반전 2 중 서로 다른 방향만
+  const ORI = [], NCELL = [];
+  for (const s of SHAPES) {
+    const cells = [];
+    s.split("|").forEach((row, i) => [...row].forEach((ch, j) => { if (ch === "#") cells.push([i, j]); }));
+    NCELL.push(cells.length);
+    const list = [];
+    for (let t = 0; t < 8; t++) {
+      const pts = cells.map(([x, y]) => {
+        for (let r = 0; r < (t & 3); r++) { const tmp = x; x = y; y = -tmp; }
+        if (t & 4) y = -y;
+        return [x, y];
+      });
+      const mi = Math.min(...pts.map(p => p[0])), mj = Math.min(...pts.map(p => p[1]));
+      const o = { h: 0, w: 0, n: pts.length, m: [0, 0, 0, 0, 0], ci: [], cj: [] };
+      for (const [x, y] of pts) {
+        const i = x - mi, j = y - mj;
+        o.ci.push(i); o.cj.push(j); o.m[i] |= 1 << j;
+        o.h = Math.max(o.h, i + 1); o.w = Math.max(o.w, j + 1);
+      }
+      o.m = o.m.slice(0, o.h);
+      if (!list.some(q => q.h === o.h && q.w === o.w && q.m.every((v, k) => v === o.m[k]))) list.push(o);
+    }
+    ORI.push(list);
+  }
+
+  const ctz = x => 31 - Math.clz32(x & -x);
+
+  function fitCols(b, off, o, r) {
+    let acc = (1 << (W - o.w + 1)) - 1;
+    for (let k = 0; k < o.n && acc; k++) acc &= ((~b[off + r + o.ci[k]]) & FULL) >> o.cj[k];
+    return acc;
+  }
+
+  function place(b, off, o, r, c) {
+    let lines = 0;
+    for (let i = 0; i < o.h; i++) {
+      const v = b[off + r + i] | (o.m[i] << c);
+      if (v === FULL) { b[off + r + i] = 0; lines++; } else b[off + r + i] = v;
+    }
+    return lines;
+  }
+
+  function countFits(b, off, p) {
+    let cnt = 0;
+    for (const o of ORI[p]) for (let r = 0; r + o.h <= H; r++) cnt += POP[fitCols(b, off, o, r)];
+    return cnt;
+  }
+
+  function evaluate(b, off, full, lines, pts, w) {
+    let cells = 0, rtr = 0, ctr = 0, iso = 0, empty = 0, partial = 0, sq = 0, wells = 0;
+    for (let r = 0; r < H; r++) {
+      const x = b[off + r], c = POP[x];
+      cells += c; sq += c * c;
+      if (c === 0) empty++; else partial++;
+      const y = (x << 1) | 1 | (1 << (W + 1));
+      rtr += POP[(y ^ (y >> 1)) & 0x7FF];
+      const up = r > 0 ? b[off + r - 1] : FULL, dn = r < H - 1 ? b[off + r + 1] : FULL;
+      if (r < H - 1) ctr += POP[(x ^ dn) & FULL];
+      if (r === 0 || r === H - 1) ctr += POP[~x & FULL];
+      const e = ~x & FULL, L = (x << 1) | 1, R = (x >> 1) | (1 << (W - 1));
+      iso += POP[e & L & R & up & dn];
+      wells += POP[e & L & R & ~(up & dn) & FULL];
+    }
+    let s = w[0] * cells + w[1] * rtr + w[2] * ctr + w[3] * iso + w[4] * empty + w[5] * partial +
+            w[6] * (sq / 10) + w[7] * wells + w[11] * lines + w[12] * pts;
+    if (full) {
+      let dead = 0, inv = 0, lg = 0;
+      for (let p = 0; p < NP; p++) {
+        const c = countFits(b, off, p);
+        if (!c) dead++;
+        inv += 1 / (1 + c);
+        lg += Math.log1p(c);
+      }
+      s += w[8] * dead + w[9] * inv + w[10] * lg;
+    }
+    return s;
+  }
+
+  function bkey(b, off, used) {
+    let h1 = 0x811c9dc5 ^ used, h2 = 0x01000193 + used;
+    for (let i = 0; i < H; i++) {
+      h1 = Math.imul(h1 ^ b[off + i], 0x01000193);
+      h2 = Math.imul(h2 + b[off + i], 0x5bd1e995) ^ (h2 >>> 15);
+    }
+    return (h1 >>> 0) * 2097152 + ((h2 >>> 0) & 0x1FFFFF);
+  }
+
+  // ---- 탐색 (재사용 버퍼; 한 스레드 안에서 재진입하지 않음) ----
+  class Level {
+    constructor() { this.cap = 0; this.cnt = 0; }
+    ensure(n) {
+      if (n <= this.cap) return;
+      this.cap = n;
+      this.b = new Uint16Array(n * H); this.lines = new Int32Array(n); this.pts = new Int32Array(n);
+      this.used = new Uint8Array(n); this.parent = new Int32Array(n); this.mv = new Int8Array(n * 4);
+      this.score = new Float64Array(n);
+    }
+  }
+  const LV = [new Level(), new Level(), new Level(), new Level()];
+  let cCap = 0, cScore, cPar, cMv, cIdx;
+  function ensureCand(n) {
+    if (n <= cCap) return;
+    const nc = Math.max(n, cCap * 2, 4096);
+    const s = new Float32Array(nc), p = new Int32Array(nc), m = new Int8Array(nc * 4);
+    if (cCap) { s.set(cScore); p.set(cPar); m.set(cMv); }
+    cScore = s; cPar = p; cMv = m; cIdx = new Int32Array(nc); cCap = nc;
+  }
+  const tmp = new Uint16Array(H);
+
+  function topSelect(idx, n, m) {  // 점수 상위 m개를 앞쪽으로 (Hoare quickselect)
+    let lo = 0, hi = n - 1;
+    const k = m - 1;
+    while (lo < hi) {
+      const piv = cScore[idx[(lo + hi) >> 1]];
+      let i = lo, j = hi;
+      while (i <= j) {
+        while (cScore[idx[i]] > piv) i++;
+        while (cScore[idx[j]] < piv) j--;
+        if (i <= j) { const t = idx[i]; idx[i] = idx[j]; idx[j] = t; i++; j--; }
+      }
+      if (k <= j) hi = j; else if (k >= i) lo = i; else break;
+    }
+  }
+
+  function selectTop(n, keep, par, out, pieces) {
+    let M = keep * 2 + 8;
+    out.ensure(keep);
+    for (;;) {
+      if (M > n) M = n;
+      for (let i = 0; i < n; i++) cIdx[i] = i;
+      topSelect(cIdx, n, M);
+      const top = Array.from(cIdx.subarray(0, M)).sort((a, b) => cScore[b] - cScore[a]);
+      const seen = new Set();
+      let m = 0;
+      for (let t = 0; t < M && m < keep; t++) {
+        const i = top[t], pi = cPar[i], s = cMv[i * 4], q = cMv[i * 4 + 1], r = cMv[i * 4 + 2], c = cMv[i * 4 + 3];
+        const ob = m * H;
+        out.b.set(par.b.subarray(pi * H, pi * H + H), ob);
+        const l = place(out.b, ob, ORI[pieces[s]][q], r, c);
+        const used = par.used[pi] | (1 << s);
+        const key = bkey(out.b, ob, used);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.lines[m] = par.lines[pi] + l; out.pts[m] = par.pts[pi] + l * l;
+        out.used[m] = used; out.parent[m] = pi; out.score[m] = cScore[i];
+        out.mv[m * 4] = s; out.mv[m * 4 + 1] = q; out.mv[m * 4 + 2] = r; out.mv[m * 4 + 3] = c;
+        m++;
+      }
+      if (m >= keep || M >= n) { out.cnt = m; return m; }
+      M *= 4;
+    }
+  }
+
+  // pieces[0..np-1]을 모두 놓는 빔 탐색. 최종 후보는 정밀 평가.
+  // 반환 { depth, nFin } — 최종 후보는 LV[depth]에 있음(score = 정밀 평가값).
+  function searchCore(start, pieces, np, w, B1, B2, K) {
+    const keeps = [1, B1, B2, K]; keeps[np] = K;
+    const L0 = LV[0]; L0.ensure(1);
+    L0.b.set(start, 0); L0.lines[0] = 0; L0.pts[0] = 0; L0.used[0] = 0; L0.parent[0] = -1; L0.cnt = 1;
+    let depth = 0;
+    for (let d = 1; d <= np; d++) {
+      const P = LV[d - 1];
+      let n = 0;
+      for (let i = 0; i < P.cnt; i++) {
+        const used = P.used[i], off = i * H;
+        for (let s = 0; s < np; s++) {
+          if (used & (1 << s)) continue;
+          let skip = false;  // 같은 종류 블록이면 앞 슬롯만 사용
+          for (let t = 0; t < s; t++) if (!(used & (1 << t)) && pieces[t] === pieces[s]) skip = true;
+          if (skip) continue;
+          const os = ORI[pieces[s]];
+          for (let q = 0; q < os.length; q++) {
+            const o = os[q];
+            for (let r = 0; r + o.h <= H; r++) {
+              let cols = fitCols(P.b, off, o, r);
+              while (cols) {
+                const c = ctz(cols); cols &= cols - 1;
+                for (let k = 0; k < H; k++) tmp[k] = P.b[off + k];
+                const l = place(tmp, 0, o, r, c);
+                ensureCand(n + 1);
+                cScore[n] = evaluate(tmp, 0, false, P.lines[i] + l, P.pts[i] + l * l, w);
+                cPar[n] = i; cMv[n * 4] = s; cMv[n * 4 + 1] = q; cMv[n * 4 + 2] = r; cMv[n * 4 + 3] = c;
+                n++;
+              }
+            }
+          }
+        }
+      }
+      if (n === 0) break;
+      selectTop(n, keeps[d], P, LV[d], pieces);
+      depth = d;
+    }
+    let nFin = 0;
+    if (depth === np) {
+      const F = LV[np];
+      for (let i = 0; i < F.cnt; i++) F.score[i] = evaluate(F.b, i * H, true, F.lines[i], F.pts[i], w);
+      nFin = F.cnt;
+    }
+    return { depth, nFin };
+  }
+
+  function tracePath(depth, idx) {
+    const moves = [];
+    for (let d = depth; d >= 1; d--) {
+      const L = LV[d];
+      moves.unshift([L.mv[idx * 4], L.mv[idx * 4 + 1], L.mv[idx * 4 + 2], L.mv[idx * 4 + 3]]);
+      idx = L.parent[idx];
+    }
+    return moves;
+  }
+
+  // 같은 자리들을 놓는 순서만 바꿔 동시 삭제 점수 최대화(최종 판이 같은 순서만)
+  function reorderForPoints(start, pieces, moves) {
+    const n = moves.length;
+    if (n < 2) return moves;
+    const perms = n === 3 ? [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] : [[0,1],[1,0]];
+    const ref = Uint16Array.from(start);
+    for (const [s, q, r, c] of moves) place(ref, 0, ORI[pieces[s]][q], r, c);
+    let best = 0, bestPts = -1;
+    perms.forEach((pm, k) => {
+      const b = Uint16Array.from(start);
+      let pts = 0;
+      for (const i of pm) {
+        const [s, q, r, c] = moves[i], o = ORI[pieces[s]][q];
+        if (!((fitCols(b, 0, o, r) >> c) & 1)) return;
+        const l = place(b, 0, o, r, c);
+        pts += l * l;
+      }
+      if (b.every((v, i) => v === ref[i]) && pts > bestPts) { bestPts = pts; best = k; }
+    });
+    return perms[best].map(i => moves[i]);
+  }
+
+  // 다음 턴 한 샘플의 가치(내부 빔 탐색 최고 점수, 못 놓으면 death)
+  function sampleValue(board, pc, w, cfg) {
+    const { depth, nFin } = searchCore(board, pc, 3, w, cfg.iB1, cfg.iB2, cfg.iK);
+    if (depth < 3) return cfg.death;
+    let best = -Infinity;
+    const F = LV[3];
+    for (let i = 0; i < nFin; i++) if (F.score[i] > best) best = F.score[i];
+    return best;
+  }
+
+  const stageOf = l => l < 30 ? 0 : l < 60 ? 1 : l < 100 ? 2 : l < 150 ? 3 : 4;
+  function drawU(u, cdf) { for (let p = 0; p < NP - 1; p++) if (u < cdf[p]) return p; return NP - 1; }
+
+  return { W, H, FULL, NP, ORI, NCELL, place, fitCols, evaluate, searchCore, tracePath, reorderForPoints,
+           sampleValue, stageOf, drawU, LV };
+})();
+if (typeof module !== "undefined") module.exports = MoaEngine;
+</script>
+<script>
+const MOA_W = [-2.5076075033398557, -3.790866618996832, -0.45897581834290235, -4.671871036610607, 0.6392766182144174, -0.3412212697781686, 0.8960905527064107, 0.520433158798613, -21.7493999916731, -7.217481621533791, 0.09452849461830173, 1.4643310868375408, 0];
+const MOA_DIST = [[0.08973, 0.02854, 0.05616, 0.0369, 0.0595, 0.03999, 0.03187, 0.08838, 0.04849, 0.06163, 0.05984, 0.05574, 0.06849, 0.04429, 0.08627, 0.09269, 0.02111, 0.0184, 0.01198], [0.07717, 0.02289, 0.04076, 0.02792, 0.0484, 0.04337, 0.02248, 0.08377, 0.04453, 0.06685, 0.05685, 0.06046, 0.07429, 0.04804, 0.10164, 0.1086, 0.02693, 0.02399, 0.02106], [0.07244, 0.03481, 0.05435, 0.02491, 0.03958, 0.03869, 0.02365, 0.09272, 0.04692, 0.05604, 0.0651, 0.05034, 0.07347, 0.05365, 0.10146, 0.11127, 0.02402, 0.0214, 0.01519], [0.07323, 0.01701, 0.04403, 0.02155, 0.05092, 0.03912, 0.02027, 0.09373, 0.04743, 0.07119, 0.06581, 0.0727, 0.07791, 0.04696, 0.10984, 0.0943, 0.02065, 0.01436, 0.01899], [0.06656, 0.02162, 0.03548, 0.03048, 0.03433, 0.02984, 0.02157, 0.08871, 0.04417, 0.06244, 0.06763, 0.06812, 0.08742, 0.05826, 0.11019, 0.11495, 0.02326, 0.01959, 0.01538]];
+// 서버 없이 브라우저에서 추천 계산: 기본 탐색은 메인 스레드, 다음 턴 lookahead는 Web Worker로 병렬.
+// MOA_W(가중치), MOA_DIST(단계별 블록 확률 5x19)는 빌드 시 삽입된다.
+const MOA_CDF = MOA_DIST.map(p => { let a = 0; const s = p.reduce((x, y) => x + y, 0); return p.map(v => (a += v / s)); });
+const MOA_BASE = { B1: 64, B2: 64, K: 256, iB1: 8, iB2: 8, iK: 32, death: -2000 };
+let moaWorkers = [], moaJob = 0, MOA_K2 = 8, MOA_S = 16;
+
+const WORKER_MAIN = `
+onmessage = e => {
+  const d = e.data;
+  if (d.ping) { postMessage({ id: d.id }); return; }
+  const sums = d.cands.map(c => {
+    const cdf = d.cdfs[MoaEngine.stageOf(d.baseLines + c.lines)];
+    const b = Uint16Array.from(c.b);
+    let t = 0;
+    for (let s = 0; s < d.S; s++) {
+      const pc = [0, 1, 2].map(k => MoaEngine.drawU(d.u[s * 3 + k], cdf));
+      t += MoaEngine.sampleValue(b, pc, d.w, d.cfg);
+    }
+    return t;
+  });
+  postMessage({ id: d.id, sums });
+};`;
+
+function moaRun(wk, msg) {
+  return new Promise((resolve, reject) => {
+    const h = e => { if (e.data.id === msg.id) { wk.removeEventListener('message', h); resolve(e.data); } };
+    wk.addEventListener('message', h);
+    wk.addEventListener('error', reject, { once: true });
+    wk.postMessage(msg);
+  });
+}
+
+async function moaStartWorkers() {
+  const n = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+  try {
+    const src = document.getElementById('engine-src').textContent + '\n' + WORKER_MAIN;
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const ws = Array.from({ length: n }, () => new Worker(url));
+    await Promise.race([
+      Promise.all(ws.map(wk => moaRun(wk, { id: ++moaJob, ping: 1 }))),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+    ]);
+    moaWorkers = ws;
+  } catch (e) {
+    moaWorkers = [];  // Worker를 못 쓰면 메인 스레드에서 작은 설정으로 계산
+  }
+  [MOA_K2, MOA_S] = moaWorkers.length >= 6 ? [32, 64] : moaWorkers.length >= 3 ? [24, 48] : moaWorkers.length ? [16, 32] : [8, 16];
+  return moaWorkers.length;
+}
+
+async function moaLookahead(cands, u, baseLines) {
+  const msgBase = { u, cdfs: MOA_CDF, baseLines, w: MOA_W, cfg: MOA_BASE, S: MOA_S };
+  if (!moaWorkers.length) {
+    return cands.map(c => {
+      const cdf = MOA_CDF[MoaEngine.stageOf(baseLines + c.lines)], b = Uint16Array.from(c.b);
+      let t = 0;
+      for (let s = 0; s < MOA_S; s++)
+        t += MoaEngine.sampleValue(b, [0, 1, 2].map(k => MoaEngine.drawU(u[s * 3 + k], cdf)), MOA_W, MOA_BASE);
+      return t;
+    });
+  }
+  const groups = moaWorkers.map(() => []);
+  cands.forEach((c, i) => groups[i % moaWorkers.length].push(i));
+  const sums = new Array(cands.length);
+  await Promise.all(groups.map(async (g, k) => {
+    if (!g.length) return;
+    const res = await moaRun(moaWorkers[k], { ...msgBase, id: ++moaJob, cands: g.map(i => cands[i]) });
+    g.forEach((i, j) => sums[i] = res.sums[j]);
+  }));
+  return sums;
+}
+
+function localPieces() {
+  return MoaEngine.ORI.map((os, p) => ({
+    id: p, cells: MoaEngine.NCELL[p], shape: os[0].m.map(m => Array.from({ length: os[0].w }, (_, j) => m >> j & 1)),
+  }));
+}
+
+async function localSolve(board, pieces, baseLines) {
+  const E = MoaEngine, np = pieces.length, start = Uint16Array.from(board);
+  const { depth, nFin } = E.searchCore(start, pieces, np, MOA_W, MOA_BASE.B1, MOA_BASE.B2, MOA_BASE.K);
+  let moves;
+  if (depth < np) {
+    moves = depth ? E.tracePath(depth, 0) : [];
+  } else {
+    const F = E.LV[np];
+    const order = [...Array(nFin).keys()].sort((a, b) => F.score[b] - F.score[a]);
+    const k2 = Math.min(MOA_K2, nFin);
+    // 탐색 버퍼는 다음 계산에 재사용되므로 await 전에 후보를 복사해 둔다
+    const cands = order.slice(0, Math.max(1, k2)).map(i => ({
+      b: Array.from(F.b.subarray(i * E.H, i * E.H + E.H)), lines: F.lines[i], pts: F.pts[i], moves: E.tracePath(np, i),
+    }));
+    let best = 0;
+    if (k2 > 1) {
+      const u = Array.from({ length: MOA_S * 3 }, () => Math.random());  // 모든 후보에 같은 샘플
+      const sums = await moaLookahead(cands, u, baseLines);
+      let bs = -Infinity;
+      cands.forEach((c, a) => {
+        const v = sums[a] / MOA_S + MOA_W[11] * c.lines + MOA_W[12] * c.pts;
+        if (v > bs) { bs = v; best = a; }
+      });
+    }
+    moves = E.reorderForPoints(start, pieces, cands[best].moves);
+  }
+  const b = board.slice();
+  let total = 0;
+  const steps = moves.map(([s, q, r, c]) => {
+    const p = pieces[s], o = E.ORI[p][q], cells = [];
+    for (let i = 0; i < o.h; i++) for (let j = 0; j < E.W; j++) if (((o.m[i] << c) >> j) & 1) cells.push([r + i, j]);
+    const l = E.place(b, 0, o, r, c);
+    total += l;
+    return { piece: p, cells, lines: l, shape: o.m.map(m => Array.from({ length: o.w }, (_, j) => m >> j & 1)) };
+  });
+  return { placed: moves.length, need: np, steps, board_after: b, lines: total };
+}
+</script>
+<script>
+const W = 10, H = 16, FULL = 0x3FF;
+let PIECES = [], board = Array(H).fill(0), lines = 0, turn = 0, game = newGameId();
+function newGameId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+const stageOf = l => l < 30 ? 1 : l < 60 ? 2 : l < 100 ? 3 : l < 150 ? 4 : 5;
+let sel = [], rec = null, item = false, undoStack = [], reqId = 0;
+const $ = id => document.getElementById(id);
+
+function save() { try { localStorage.setItem('moamoa', JSON.stringify({ board, lines, turn, game })); } catch (e) {} }
+function load() {
+  try { const s = JSON.parse(localStorage.getItem('moamoa')); if (s && s.board.length === H) { ({ board, lines, turn } = s); if (s.game) game = s.game; } } catch (e) {}
+}
+function pushUndo() { undoStack.push(JSON.stringify({ board, lines, turn })); if (undoStack.length > 200) undoStack.shift(); }
+
+function mini(shape) {
+  const g = document.createElement('div'); g.className = 'mini';
+  g.style.gridTemplateColumns = `repeat(${shape[0].length}, 11px)`;
+  for (const row of shape) for (const v of row) { const i = document.createElement('i'); if (v) i.className = 'f'; g.appendChild(i); }
+  return g;
+}
+
+function renderBoard() {
+  const el = $('board'); el.innerHTML = '';
+  el.appendChild(document.createElement('span'));
+  for (let c = 0; c < W; c++) { const l = document.createElement('span'); l.className = 'lbl'; l.textContent = c; el.appendChild(l); }
+  const mark = {}, clr = new Set();
+  if (rec) rec.steps.forEach((s, k) => s.cells.forEach(([r, c]) => mark[r * W + c] = k));
+  if (rec) {  // 이번 배치로 지워지는 줄 표시
+    let b = board.slice();
+    rec.steps.forEach(s => { s.cells.forEach(([r, c]) => b[r] |= 1 << c); for (let r = 0; r < H; r++) if (b[r] === FULL) { clr.add(r); b[r] = 0; } });
+  }
+  for (let r = 0; r < H; r++) {
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = r; el.appendChild(l);
+    for (let c = 0; c < W; c++) {
+      const d = document.createElement('div'); d.className = 'cell';
+      const k = mark[r * W + c];
+      if (k !== undefined) { d.classList.add('s' + k); d.textContent = 'ABC'[k]; }
+      else if (board[r] >> c & 1) d.classList.add('on');
+      if (clr.has(r)) d.classList.add('clr');
+      d.onclick = () => {  // 수정용 클릭. 게임엔 꽉 찬 줄이 남지 않으므로 꽉 차면 지우고 줄 수에 반영
+        pushUndo(); board[r] ^= 1 << c;
+        if (board[r] === FULL) { board[r] = 0; lines++; }
+        save(); refresh();
+      };
+      el.appendChild(d);
+    }
+  }
+  $('turn').textContent = turn; $('lines').textContent = lines; $('stage').textContent = stageOf(lines) + '단계';
+}
+
+function renderSlots() {
+  const el = $('slots'); el.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const d = document.createElement('div'); d.className = 'slot';
+    if (i < sel.length) {
+      const p = PIECES[sel[i]]; d.classList.add('full');
+      const t = document.createElement('span'); t.className = 'tag'; t.textContent = `${p.id + 1}번 · ${p.cells}칸`; d.appendChild(t);
+      d.appendChild(mini(p.shape));
+      const h = document.createElement('span'); h.className = 'hint'; h.textContent = '클릭하면 빼기'; d.appendChild(h);
+      d.onclick = () => { sel.splice(i, 1); refresh(); };
+    } else {
+      d.innerHTML = '<span class="hint">블록을 고르세요</span>';
+    }
+    el.appendChild(d);
+  }
+}
+
+function renderSteps() {
+  const el = $('steps'); el.innerHTML = '';
+  if (!rec) { el.textContent = sel.length || item ? '' : '아래에서 블록을 고르세요.'; return; }
+  if (rec.placed < rec.need) {
+    const w = document.createElement('div'); w.className = 'warn';
+    w.textContent = `⚠ ${rec.need}개를 모두 놓을 방법이 없습니다 (최대 ${rec.placed}개). 게임 오버 상황입니다.`;
+    el.appendChild(w);
+  }
+  rec.steps.forEach((s, k) => {
+    const sp = document.createElement('span'); sp.className = 'st';
+    sp.innerHTML = `<b class="l${k}">${'ABC'[k]}</b> ${s.piece + 1}번`;
+    sp.appendChild(mini(s.shape));
+    if (s.lines) sp.insertAdjacentHTML('beforeend', `<span>→ ${s.lines}줄</span>`);
+    el.appendChild(sp);
+  });
+}
+
+function refresh(recompute = true) {
+  if (recompute) { rec = null; if (sel.length && !item) request(sel); else if (!item) $('busy').textContent = ''; }
+  if (item && recompute) request([0], true);
+  renderBoard(); renderSlots(); renderSteps();
+  $('place').disabled = !rec || rec.placed === 0;
+}
+
+async function request(pieces, isItem = false) {
+  const id = ++reqId; $('busy').textContent = '계산 중…';
+  try {
+    const data = await localSolve(board.slice(), pieces, lines);
+    if (id !== reqId) return;
+    rec = data; item = isItem; $('busy').textContent = '';
+  } catch (e) { if (id === reqId) $('busy').textContent = '오류: ' + e.message; }
+  renderBoard(); renderSlots(); renderSteps();
+  $('place').disabled = !rec || rec.placed === 0;
+}
+
+function place() {
+  if (!rec || rec.placed === 0) return;
+  pushUndo();
+  board = rec.board_after; lines += rec.lines;
+  if (!item && rec.need === 3) turn++;
+  sel = []; item = false; save(); refresh();
+}
+
+function addPiece(p) {
+  item = false;
+  if (sel.length >= 3) sel = [];
+  sel.push(p); refresh();
+}
+
+async function init() {
+  load();
+  PIECES = localPieces();
+  moaStartWorkers().then(n => { $('cores').textContent = n ? `${n}코어 병렬 계산` : '단일 스레드 계산'; });
+  const pal = $('palette');
+  PIECES.forEach(p => {
+    const d = document.createElement('div'); d.className = 'pc';
+    d.innerHTML = `<span class="n">${p.id + 1}</span><span class="k">${p.cells}칸</span>`;
+    d.appendChild(mini(p.shape)); d.onclick = () => addPiece(p.id); pal.appendChild(d);
+  });
+  $('place').onclick = place;
+  $('clear').onclick = () => { sel = []; item = false; refresh(); };
+  $('item').onclick = () => { sel = []; item = true; refresh(); };
+  $('undo').onclick = undo;
+  $('reset').onclick = () => { if (confirm('판을 비우고 새 게임을 시작할까요?')) { pushUndo(); board = Array(H).fill(0); lines = 0; turn = 0; game = newGameId(); sel = []; item = false; save(); refresh(); } };
+  $('lines').onclick = () => {
+    const v = prompt('게임 화면의 지운 줄 수를 입력하세요 (단계 판정에 사용)', lines);
+    if (v !== null && /^\d+$/.test(v.trim())) { pushUndo(); lines = +v.trim(); save(); refresh(); }
+  };
+  $('nums').onkeydown = e => {
+    if (e.key !== 'Enter') return;
+    e.stopPropagation();
+    const n = e.target.value.split(/[\s,]+/).filter(Boolean).map(Number);
+    if (n.length >= 1 && n.length <= 3 && n.every(x => Number.isInteger(x) && x >= 1 && x <= 19)) {
+      sel = n.map(x => x - 1); item = false; e.target.value = ''; refresh();
+    } else e.target.select();
+  };
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (e.key === 'Enter') place();
+  });
+  refresh();
+}
+function undo() {
+  if (!undoStack.length) return;
+  ({ board, lines, turn } = JSON.parse(undoStack.pop())); sel = []; item = false; save(); refresh();
+}
+init();
+</script>
+</body>
+</html>

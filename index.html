@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>모아모아 헬퍼</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #1a2130; --line: #2c3547; --text: #e6e9ef; --muted: #8b93a5;
+    --cell: #0b0f18; --fill: #6b7486; --a: #f0529c; --b: #22c3d6; --c: #f5c518;
+    --btn: #2a3346; --primary: #16a34a; --danger: #dc4444; --accent: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Malgun Gothic", sans-serif; }
+  main { display: flex; gap: 20px; padding: 20px; flex-wrap: wrap; justify-content: center; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  h2 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h2 small { color: var(--muted); font-weight: normal; }
+  h2 b { color: var(--text); }
+  #board { display: grid; grid-template-columns: 22px repeat(10, 32px); gap: 2px; user-select: none; }
+  .lbl { color: var(--muted); font-size: 11px; display: flex; align-items: center; justify-content: center; }
+  .cell { width: 32px; height: 32px; background: var(--cell); border: 1px solid var(--line); border-radius: 4px;
+          cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+  .cell:hover { outline: 2px solid var(--accent); }
+  .cell.on { background: var(--fill); border-color: var(--fill); }
+  .cell.s0 { background: var(--a); border-color: var(--a); color: #111; }
+  .cell.s1 { background: var(--b); border-color: var(--b); color: #111; }
+  .cell.s2 { background: var(--c); border-color: var(--c); color: #111; }
+  .cell.clr { box-shadow: inset 0 0 0 2px #fff6; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { background: var(--btn); color: var(--text); border: 0; border-radius: 8px; padding: 10px 14px; font: inherit;
+           font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { filter: brightness(1.15); }
+  button:disabled { opacity: .4; cursor: default; }
+  .primary { background: var(--primary); } .danger { background: var(--danger); } .accent { background: var(--accent); }
+  .grow { flex: 1; }
+  #right { width: 560px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; }
+  #slots { display: flex; gap: 10px; }
+  .slot { flex: 1; min-height: 110px; border: 2px dashed var(--line); border-radius: 10px; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 6px; cursor: pointer; position: relative; }
+  .slot.full { border-style: solid; }
+  .slot .tag { position: absolute; top: 4px; left: 8px; font-weight: 700; }
+  .slot .hint { color: var(--muted); font-size: 12px; }
+  .mini { display: grid; gap: 2px; }
+  .mini i { width: 11px; height: 11px; border-radius: 2px; }
+  .mini i.f { background: var(--text); }
+  #steps { margin-top: 10px; color: var(--muted); min-height: 22px; }
+  #steps .st { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--text); }
+  #steps .st b.l0 { color: var(--a); } #steps .st b.l1 { color: var(--b); } #steps .st b.l2 { color: var(--c); }
+  .warn { color: #ff8a8a !important; font-weight: 600; }
+  #palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .pc { background: var(--cell); border: 1px solid var(--line); border-radius: 10px; height: 92px; cursor: pointer; position: relative;
+        display: flex; align-items: center; justify-content: center; }
+  .pc:hover { border-color: var(--accent); }
+  .pc .n { position: absolute; top: 3px; left: 7px; font-weight: 700; font-size: 12px; }
+  .pc .k { position: absolute; top: 3px; right: 7px; color: var(--muted); font-size: 11px; }
+  .pc .mini i.f { background: #9fb4d8; }
+  .help { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+  kbd { background: var(--btn); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+  #busy { color: var(--muted); }
+  input#nums { background: var(--cell); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; width: 150px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h2>판 <small>턴 <b id="turn">0</b> · 지운 줄 <b id="lines" title="클릭해서 수정" style="cursor:pointer;text-decoration:underline dotted">0</b> · <b id="stage">1단계</b></small></h2>
+    <div id="board"></div>
+    <div class="help">칸 클릭 = 채우기/비우기 (실수 수정용 · 줄이 꽉 차면 자동 삭제)</div>
+    <div class="row">
+      <button id="undo" class="grow">↶ 되돌리기</button>
+      <button id="reset" class="danger grow">판 초기화</button>
+    </div>
+  </section>
+
+  <section id="right">
+    <div class="panel">
+      <h2>이번 턴 블록 <small id="busy"></small></h2>
+      <div id="slots"></div>
+      <div id="steps"></div>
+      <div class="row">
+        <button id="place" class="primary grow" disabled>추천대로 놓기 <kbd>Enter</kbd></button>
+        <button id="item" class="accent">1칸 아이템 추천</button>
+        <button id="clear">선택 취소</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>블록 선택 <small>번호 입력: <input id="nums" placeholder="예: 17 19 9"></small></h2>
+      <div class="help">게임에 나온 블록을 1~3개 고르면 바로 추천합니다. 회전·반전은 자동으로 고려합니다.
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기</div>
+      <div id="palette"></div>
+    </div>
+  </section>
+</main>
+<script>
+const W = 10, H = 16, FULL = 0x3FF;
+let PIECES = [], board = Array(H).fill(0), lines = 0, turn = 0, game = newGameId();
+function newGameId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+const stageOf = l => l < 30 ? 1 : l < 60 ? 2 : l < 100 ? 3 : l < 150 ? 4 : 5;
+let sel = [], rec = null, item = false, undoStack = [], reqId = 0;
+const $ = id => document.getElementById(id);
+
+function save() { try { localStorage.setItem('moamoa', JSON.stringify({ board, lines, turn, game })); } catch (e) {} }
+function load() {
+  try { const s = JSON.parse(localStorage.getItem('moamoa')); if (s && s.board.length === H) { ({ board, lines, turn } = s); if (s.game) game = s.game; } } catch (e) {}
+}
+function pushUndo() { undoStack.push(JSON.stringify({ board, lines, turn })); if (undoStack.length > 200) undoStack.shift(); }
+
+function mini(shape) {
+  const g = document.createElement('div'); g.className = 'mini';
+  g.style.gridTemplateColumns = `repeat(${shape[0].length}, 11px)`;
+  for (const row of shape) for (const v of row) { const i = document.createElement('i'); if (v) i.className = 'f'; g.appendChild(i); }
+  return g;
+}
+
+function renderBoard() {
+  const el = $('board'); el.innerHTML = '';
+  el.appendChild(document.createElement('span'));
+  for (let c = 0; c < W; c++) { const l = document.createElement('span'); l.className = 'lbl'; l.textContent = c; el.appendChild(l); }
+  const mark = {}, clr = new Set();
+  if (rec) rec.steps.forEach((s, k) => s.cells.forEach(([r, c]) => mark[r * W + c] = k));
+  if (rec) {  // 이번 배치로 지워지는 줄 표시
+    let b = board.slice();
+    rec.steps.forEach(s => { s.cells.forEach(([r, c]) => b[r] |= 1 << c); for (let r = 0; r < H; r++) if (b[r] === FULL) { clr.add(r); b[r] = 0; } });
+  }
+  for (let r = 0; r < H; r++) {
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = r; el.appendChild(l);
+    for (let c = 0; c < W; c++) {
+      const d = document.createElement('div'); d.className = 'cell';
+      const k = mark[r * W + c];
+      if (k !== undefined) { d.classList.add('s' + k); d.textContent = 'ABC'[k]; }
+      else if (board[r] >> c & 1) d.classList.add('on');
+      if (clr.has(r)) d.classList.add('clr');
+      d.onclick = () => {  // 수정용 클릭. 게임엔 꽉 찬 줄이 남지 않으므로 꽉 차면 지우고 줄 수에 반영
+        pushUndo(); board[r] ^= 1 << c;
+        if (board[r] === FULL) { board[r] = 0; lines++; }
+        save(); refresh();
+      };
+      el.appendChild(d);
+    }
+  }
+  $('turn').textContent = turn; $('lines').textContent = lines; $('stage').textContent = stageOf(lines) + '단계';
+}
+
+function renderSlots() {
+  const el = $('slots'); el.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const d = document.createElement('div'); d.className = 'slot';
+    if (i < sel.length) {
+      const p = PIECES[sel[i]]; d.classList.add('full');
+      const t = document.createElement('span'); t.className = 'tag'; t.textContent = `${p.id + 1}번 · ${p.cells}칸`; d.appendChild(t);
+      d.appendChild(mini(p.shape));
+      const h = document.createElement('span'); h.className = 'hint'; h.textContent = '클릭하면 빼기'; d.appendChild(h);
+      d.onclick = () => { sel.splice(i, 1); refresh(); };
+    } else {
+      d.innerHTML = '<span class="hint">블록을 고르세요</span>';
+    }
+    el.appendChild(d);
+  }
+}
+
+function renderSteps() {
+  const el = $('steps'); el.innerHTML = '';
+  if (!rec) { el.textContent = sel.length || item ? '' : '아래에서 블록을 고르세요.'; return; }
+  if (rec.placed < rec.need) {
+    const w = document.createElement('div'); w.className = 'warn';
+    w.textContent = `⚠ ${rec.need}개를 모두 놓을 방법이 없습니다 (최대 ${rec.placed}개). 게임 오버 상황입니다.`;
+    el.appendChild(w);
+  }
+  rec.steps.forEach((s, k) => {
+    const sp = document.createElement('span'); sp.className = 'st';
+    sp.innerHTML = `<b class="l${k}">${'ABC'[k]}</b> ${s.piece + 1}번`;
+    sp.appendChild(mini(s.shape));
+    if (s.lines) sp.insertAdjacentHTML('beforeend', `<span>→ ${s.lines}줄</span>`);
+    el.appendChild(sp);
+  });
+}
+
+function refresh(recompute = true) {
+  if (recompute) { rec = null; if (sel.length && !item) request(sel); else if (!item) $('busy').textContent = ''; }
+  if (item && recompute) request([0], true);
+  renderBoard(); renderSlots(); renderSteps();
+  $('place').disabled = !rec || rec.placed === 0;
+}
+
+async function request(pieces, isItem = false) {
+  const id = ++reqId; $('busy').textContent = '계산 중…';
+  try {
+    const res = await fetch('/api/solve', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board, pieces, total_lines: lines, game, turn }) });
+    const data = await res.json();
+    if (id !== reqId) return;
+    if (!res.ok) throw new Error(data.error);
+    rec = data; item = isItem; $('busy').textContent = '';
+  } catch (e) { if (id === reqId) $('busy').textContent = '오류: ' + e.message; }
+  renderBoard(); renderSlots(); renderSteps();
+  $('place').disabled = !rec || rec.placed === 0;
+}
+
+function place() {
+  if (!rec || rec.placed === 0) return;
+  pushUndo();
+  board = rec.board_after; lines += rec.lines;
+  if (!item && rec.need === 3) turn++;
+  sel = []; item = false; save(); refresh();
+}
+
+function addPiece(p) {
+  item = false;
+  if (sel.length >= 3) sel = [];
+  sel.push(p); refresh();
+}
+
+async function init() {
+  load();
+  PIECES = await (await fetch('/api/pieces')).json();
+  const pal = $('palette');
+  PIECES.forEach(p => {
+    const d = document.createElement('div'); d.className = 'pc';
+    d.innerHTML = `<span class="n">${p.id + 1}</span><span class="k">${p.cells}칸</span>`;
+    d.appendChild(mini(p.shape)); d.onclick = () => addPiece(p.id); pal.appendChild(d);
+  });
+  $('place').onclick = place;
+  $('clear').onclick = () => { sel = []; item = false; refresh(); };
+  $('item').onclick = () => { sel = []; item = true; refresh(); };
+  $('undo').onclick = undo;
+  $('reset').onclick = () => { if (confirm('판을 비우고 새 게임을 시작할까요?')) { pushUndo(); board = Array(H).fill(0); lines = 0; turn = 0; game = newGameId(); sel = []; item = false; save(); refresh(); } };
+  $('lines').onclick = () => {
+    const v = prompt('게임 화면의 지운 줄 수를 입력하세요 (단계 판정에 사용)', lines);
+    if (v !== null && /^\d+$/.test(v.trim())) { pushUndo(); lines = +v.trim(); save(); refresh(); }
+  };
+  $('nums').onkeydown = e => {
+    if (e.key !== 'Enter') return;
+    e.stopPropagation();
+    const n = e.target.value.split(/[\s,]+/).filter(Boolean).map(Number);
+    if (n.length >= 1 && n.length <= 3 && n.every(x => Number.isInteger(x) && x >= 1 && x <= 19)) {
+      sel = n.map(x => x - 1); item = false; e.target.value = ''; refresh();
+    } else e.target.select();
+  };
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (e.key === 'Enter') place();
+  });
+  refresh();
+}
+function undo() {
+  if (!undoStack.length) return;
+  ({ board, lines, turn } = JSON.parse(undoStack.pop())); sel = []; item = false; save(); refresh();
+}
+init();
+</script>
+</body>
+</html>
